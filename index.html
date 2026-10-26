@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AICTE Approval and Compliance Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f4f6fb; --card:#fff; --ink:#1b2437; --muted:#6b7590; --brand:#1f3a8a; --line:#e3e7f0;
+          --red:#dc2626; --amber:#d97706; --green:#16a34a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Segoe UI, Arial, sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--brand); color:#fff; padding:14px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  header h1 { margin:0; font-size:18px; }
+  header small { opacity:.8; }
+  .controls { display:flex; gap:10px; align-items:center; }
+  select, button { font:inherit; padding:7px 10px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--brand); color:#fff; border:none; }
+  button.act { background:#eef2ff; color:var(--brand); border:1px solid #c7d2fe; padding:4px 9px; font-size:12px; }
+  nav { display:flex; gap:6px; padding:12px 24px 0; flex-wrap:wrap; }
+  nav button { border:none; background:transparent; padding:9px 14px; border-radius:8px 8px 0 0; color:var(--muted); font-weight:600; }
+  nav button.on { background:var(--card); color:var(--brand); }
+  main { padding:0 24px 24px; }
+  .panel { background:var(--card); border-radius:0 12px 12px 12px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,.06); display:none; }
+  .panel.on { display:block; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:16px; }
+  .kpi { border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .kpi .n { font-size:28px; font-weight:700; }
+  .kpi .l { color:var(--muted); font-size:12px; }
+  .kpi.r .n { color:var(--red); } .kpi.a .n { color:var(--amber); } .kpi.g .n { color:var(--green); } .kpi.p .n { color:#7c3aed; }
+  .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
+  .chartbox { border:1px solid var(--line); border-radius:12px; padding:10px; height:280px; }
+  .chartbox h4 { margin:0 0 6px; font-size:13px; color:var(--muted); }
+  .chartbox div { height:230px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--muted); font-weight:600; padding:8px; border-bottom:2px solid var(--line); }
+  td { padding:8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .b { padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; color:#fff; }
+  .b.RED { background:var(--red); } .b.AMBER { background:var(--amber); } .b.GREEN { background:var(--green); }
+  .b.DONE { background:#64748b; } .b.PAUSED { background:#7c3aed; }
+  .lvl { padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; background:#fee2e2; color:#991b1b; }
+  .lvl.l0 { background:#fef3c7; color:#92400e; } .lvl.l1 { background:#ffedd5; color:#9a3412; }
+  .toolbar { display:flex; gap:10px; margin-bottom:10px; align-items:center; }
+  .safe { margin:16px 24px; padding:10px 14px; border-left:4px solid var(--brand); background:#eef2ff; font-size:12px; color:#27337a; border-radius:6px; }
+  .mono { font-family:Consolas, monospace; font-size:11px; color:var(--muted); }
+  .note { color:var(--muted); font-size:12px; margin:0 0 12px; }
+  .rep { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; }
+  .rep button { text-align:left; padding:12px 14px; font-weight:600; color:var(--brand); }
+  h3 { margin:0 0 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>AICTE Approval Workflow and Compliance Monitor</h1>
+    <small>Real-time pendency, EVC, undertakings and document validity</small>
+  </div>
+  <div class="controls">
+    <select id="role" onchange="role=this.value; render()"></select>
+    <button class="primary" onclick="runCheck()">Run alert check</button>
+    <button onclick="render()">Refresh</button>
+  </div>
+</header>
+
+<nav id="tabs"></nav>
+
+<main>
+  <section class="panel" id="p-overview">
+    <div class="kpis" id="kpis"></div>
+    <div class="grid3">
+      <div class="chartbox"><h4>Application health</h4><div><canvas id="c1"></canvas></div></div>
+      <div class="chartbox"><h4>Pending by stage</h4><div><canvas id="c2"></canvas></div></div>
+      <div class="chartbox"><h4>Region-wise total vs overdue</h4><div><canvas id="c3"></canvas></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-apps">
+    <div class="toolbar">
+      <h3 style="margin:0">Applications</h3>
+      <select id="hf" onchange="render()">
+        <option value="ALL">All health</option><option value="RED">Overdue (Red)</option>
+        <option value="AMBER">Due soon (Amber)</option><option value="GREEN">On track (Green)</option>
+        <option value="PAUSED">Returned (Paused)</option>
+      </select>
+    </div>
+    <p class="note">Return karte waqt reason zaroori hai. Return ke baad SLA clock ruk jata hai, institution resubmit kare to dobara shuru hota hai.</p>
+    <div id="apps"></div>
+  </section>
+
+  <section class="panel" id="p-evc">
+    <h3>EVC queue</h3>
+    <p class="note">EVC ki date schedule karo. EVC complete hone par Applications tab se "Complete stage" dabao.</p>
+    <div id="evc"></div>
+  </section>
+  <section class="panel" id="p-ut"><h3>Time-bound undertakings</h3><div id="ut"></div></section>
+  <section class="panel" id="p-doc"><h3>Lease and document validity</h3><div id="doc"></div></section>
+  <section class="panel" id="p-alerts"><h3>Alerts and escalations</h3><div id="alerts"></div></section>
+
+  <section class="panel" id="p-reports">
+    <h3>Reports (CSV, Excel mein khulti hai)</h3>
+    <p class="note">Upar role dropdown jis Region par hai, report usi Region ki banegi (Bureau Officer = sabhi Regions).</p>
+    <div class="rep">
+      <button onclick="downloadReport('pendency')">Application pendency report</button>
+      <button onclick="downloadReport('evc')">EVC status report</button>
+      <button onclick="downloadReport('undertakings')">Undertaking compliance report</button>
+      <button onclick="downloadReport('documents')">Document validity report</button>
+      <button onclick="downloadReport('overdue')">All overdue cases report</button>
+      <button onclick="downloadReport('region-performance')">Region-wise performance report</button>
+    </div>
+  </section>
+
+  <section class="panel" id="p-audit"><h3>Audit trail (hash chain)</h3><div id="audit"></div></section>
+</main>
+
+<div class="safe">
+  <b>Regulatory safeguard:</b> This system supports the approval process through routing, alerts and tracking.
+  Scrutiny, verification, inspections and final decisions remain with the competent authority.
+</div>
+
+<script>
+let role = 'ALL', tab = 'overview', charts = {};
+const REGIONS = ['Central','Eastern','Northern','Southern','Western','South Western'];
+const TABS = [['overview','Overview'],['apps','Applications'],['evc','EVC'],['ut','Undertakings'],['doc','Documents'],['alerts','Alerts'],['reports','Reports'],['audit','Audit trail']];
+const $ = id => document.getElementById(id);
+
+async function get(u) { const r = await fetch(u); return r.json(); }
+async function post(u, body) {
+  const r = await fetch(u, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {}) });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    alert(e.error || 'Kuch galat ho gaya');
+  }
+  render();
+}
+const filt = list => role === 'ALL' ? list : list.filter(x => x.region === role);
+const badge = h => '<span class="b ' + h + '">' + (h === 'PAUSED' ? 'RETURNED' : h) + '</span>';
+const dt = d => new Date(d).toLocaleDateString('en-IN');
+const esc = s => String(s === undefined || s === null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const actor = () => role === 'ALL' ? 'Bureau Officer' : 'Regional Officer - ' + role;
+
+const advanceApp = id => post('/api/applications/' + id + '/advance', { actor: actor() });
+const resubmitApp = id => post('/api/applications/' + id + '/resubmit', { actor: 'Institution' });
+function revertApp(id) {
+  const reason = prompt('Return ka reason likho (deficiency ya clarification):');
+  if (reason === null) return;
+  post('/api/applications/' + id + '/revert', { reason: reason, actor: actor() });
+}
+function scheduleEvc(id) {
+  const d = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
+  const date = prompt('EVC ki date (YYYY-MM-DD):', d);
+  if (date === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { alert('Date format YYYY-MM-DD hona chahiye'); return; }
+  post('/api/evc/' + id + '/schedule', { date: date, actor: actor() });
+}
+function downloadReport(f) { window.location = '/api/reports/' + f + '.csv?region=' + encodeURIComponent(role); }
+
+function table(cols, rows) {
+  if (!rows.length) return '<p style="color:#6b7590">Koi record nahi mila.</p>';
+  return '<table><tr>' + cols.map(c => '<th>' + c + '</th>').join('') + '</tr>' +
+    rows.map(r => '<tr>' + r.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</table>';
+}
+function makeChart(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  cfg.options = Object.assign({ responsive:true, maintainAspectRatio:false }, cfg.options || {});
+  charts[id] = new Chart($(id), cfg);
+}
+function setup() {
+  $('role').innerHTML = '<option value="ALL">Bureau Officer (All Regions)</option>' +
+    REGIONS.map(r => '<option value="' + r + '">Regional Officer - ' + r + '</option>').join('');
+  $('tabs').innerHTML = TABS.map(t => '<button id="t-' + t[0] + '" onclick="showTab(\'' + t[0] + '\')">' + t[1] + '</button>').join('');
+  showTab('overview');
+}
+function showTab(t) {
+  tab = t;
+  TABS.forEach(x => {
+    $('t-' + x[0]).className = x[0] === t ? 'on' : '';
+    $('p-' + x[0]).className = 'panel' + (x[0] === t ? ' on' : '');
+  });
+  render();
+}
+async function runCheck() { await fetch('/api/run-check', { method:'POST' }); render(); }
+
+async function render() {
+  const [apps, ut, docs, evc, notes, audit] = await Promise.all([
+    get('/api/applications'), get('/api/undertakings'), get('/api/documents'),
+    get('/api/evc'), get('/api/notifications'), get('/api/audit')
+  ]);
+  const A = filt(apps), U = filt(ut), D = filt(docs), E = filt(evc), N = filt(notes);
+
+  // KPIs
+  const red = A.filter(a => a.health === 'RED').length;
+  const amber = A.filter(a => a.health === 'AMBER').length;
+  const green = A.filter(a => a.health === 'GREEN').length;
+  const returned = A.filter(a => a.health === 'PAUSED').length;
+  const evcPending = E.filter(e => !e.scheduled).length;
+  const utOver = U.filter(u => u.status === 'PENDING' && u.health === 'RED').length;
+  const docBad = D.filter(d => d.status === 'VALID' && d.health === 'RED').length;
+  const docSoon = D.filter(d => d.status === 'VALID' && d.health === 'AMBER').length;
+  const kpi = (n, l, c) => '<div class="kpi ' + c + '"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>';
+  $('kpis').innerHTML = kpi(A.length, 'Applications in view', '') + kpi(red, 'Overdue applications', 'r') +
+    kpi(amber, 'Due within 3 days', 'a') + kpi(returned, 'Returned for deficiency', 'p') +
+    kpi(evcPending, 'EVC not yet scheduled', 'a') + kpi(utOver, 'Overdue undertakings', 'r') +
+    kpi(docBad, 'Expired documents', 'r') + kpi(docSoon, 'Documents expiring soon', 'a') +
+    kpi(N.length, 'Alerts generated', '');
+
+  // Charts
+  makeChart('c1', { type:'doughnut', data:{ labels:['Overdue','Due soon','On track','Returned'],
+    datasets:[{ data:[red, amber, green, returned], backgroundColor:['#dc2626','#d97706','#16a34a','#7c3aed'] }] } });
+  const stages = {}; A.forEach(a => stages[a.currentStage] = (stages[a.currentStage] || 0) + 1);
+  makeChart('c2', { type:'bar', data:{ labels:Object.keys(stages),
+    datasets:[{ label:'Applications', data:Object.values(stages), backgroundColor:'#1f3a8a' }] },
+    options:{ plugins:{ legend:{ display:false } } } });
+  const regs = {}; A.forEach(a => { regs[a.region] = regs[a.region] || { t:0, o:0 };
+    regs[a.region].t++; if (a.health === 'RED') regs[a.region].o++; });
+  makeChart('c3', { type:'bar', data:{ labels:Object.keys(regs), datasets:[
+    { label:'Total', data:Object.values(regs).map(x => x.t), backgroundColor:'#93a4d8' },
+    { label:'Overdue', data:Object.values(regs).map(x => x.o), backgroundColor:'#dc2626' } ] } });
+
+  // Applications
+  const hf = $('hf').value;
+  const rows = A.filter(a => hf === 'ALL' || a.health === hf)
+    .sort((a, b) => a.daysLeft - b.daysLeft).slice(0, 30).map(a => {
+      let action = '<b>Ready for decision</b>';
+      if (a.status === 'IN_PROGRESS') {
+        action = '<button class="act" onclick="advanceApp(' + a.id + ')">Complete stage &gt;</button> ' +
+                 '<button class="act" onclick="revertApp(' + a.id + ')">Return</button>';
+      } else if (a.status === 'RETURNED') {
+        action = '<button class="act" onclick="resubmitApp(' + a.id + ')">Institution resubmits</button>';
+      }
+      const time = a.status !== 'IN_PROGRESS' ? '-' :
+        (a.daysLeft < 0 ? Math.abs(a.daysLeft) + ' din late' : a.daysLeft + ' din baaki');
+      return [a.id, a.institution, a.region, a.workflow.replace(/_/g, ' + '), a.currentStage,
+        dt(a.dueDate), time, badge(a.health), esc(a.returnReason), action];
+    });
+  $('apps').innerHTML = table(['ID','Institution','Region','Workflow','Stage','Due','Time','Health','Return reason','Action'], rows);
+
+  // EVC
+  $('evc').innerHTML = table(['App ID','Institution','Region','Stage due','Days','EVC date','Health','Action'],
+    E.sort((a, b) => a.daysLeft - b.daysLeft).map(e => [e.applicationId, e.institution, e.region, dt(e.dueDate),
+      e.daysLeft, e.scheduled ? '<b>' + esc(e.evcDate) + '</b>' : 'Not scheduled', badge(e.health),
+      e.scheduled ? 'Scheduled' : '<button class="act" onclick="scheduleEvc(' + e.applicationId + ')">Schedule EVC</button>']));
+
+  // Undertakings
+  $('ut').innerHTML = table(['ID','Institution','Region','Condition','Due','Health','Status','Action'],
+    U.sort((a, b) => a.daysLeft - b.daysLeft).slice(0, 30).map(u => [u.id, u.institution, u.region, u.condition, dt(u.dueDate),
+      badge(u.health), u.status,
+      u.status === 'PENDING' ? '<button class="act" onclick="post(\'/api/undertakings/' + u.id + '/submit\')">Submit evidence</button>' :
+      u.status === 'SUBMITTED' ? '<button class="act" onclick="post(\'/api/undertakings/' + u.id + '/verify\', {actor:actor()})">Verify</button>' : 'Closed']));
+
+  // Documents
+  $('doc').innerHTML = table(['ID','Institution','Region','Document','Expiry','Health','Status','Action'],
+    D.sort((a, b) => a.daysLeft - b.daysLeft).slice(0, 30).map(d => [d.id, d.institution, d.region, d.docType, dt(d.expiryDate),
+      badge(d.health), d.status,
+      d.status === 'VALID' ? '<button class="act" onclick="post(\'/api/documents/' + d.id + '/renew\')">Submit renewal</button>' :
+      d.status === 'RENEWAL_SUBMITTED' ? '<button class="act" onclick="post(\'/api/documents/' + d.id + '/verify\', {actor:actor()})">Verify</button>' : 'Closed']));
+
+  // Alerts
+  $('alerts').innerHTML = table(['Time','Level','Type','Sent to','Message'],
+    N.slice().sort((a, b) => b.level - a.level).slice(0, 40).map(n => [new Date(n.createdAt).toLocaleTimeString('en-IN'),
+      '<span class="lvl l' + n.level + '">L' + n.level + '</span>', n.type, n.to, esc(n.message)]));
+
+  // Audit
+  $('audit').innerHTML = table(['#','Entity','Action','Actor','Reason','Hash (short)','Prev hash (short)'],
+    audit.slice(-30).reverse().map((x, i) => [audit.length - i, x.entity + ' ' + x.entityId, esc(x.action), esc(x.actor),
+      esc(x.reason),
+      '<span class="mono">' + x.hash.slice(0, 12) + '</span>', '<span class="mono">' + x.prev.slice(0, 12) + '</span>']));
+}
+
+setup();
+setInterval(render, 30000);
+</script>
+</body>
+</html>
