@@ -1,0 +1,15 @@
+{
+  "workflows": {
+    "ONLY_SCRUTINY": ["SCRUTINY"],
+    "SCRUTINY_EVC": ["SCRUTINY", "EVC"],
+    "EVC_SAC": ["EVC", "SAC_SHC"],
+    "ONLY_EVC": ["EVC"]
+  },
+  "stageSLA_days": { "SCRUTINY": 15, "EVC": 30, "SAC_SHC": 20 },
+  "amberBeforeDays": 3,
+  "escalation": [
+    { "afterDaysOverdue": 0, "level": 1, "to": "REGIONAL_OFFICER" },
+    { "afterDaysOverdue": 3, "level": 2, "to": "BUREAU_OFFICER" },
+    { "afterDaysOverdue": 7, "level": 3, "to": "COMMITTEE_HEAD" }
+  ]
+}
